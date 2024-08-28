@@ -8,6 +8,7 @@ let modelCenter = new THREE.Vector3();
 let targetExplodeFactor = 0;  // 목표 explodeFactor
 let animationSpeed = 0.1;  // 애니메이션 속도 조정
 let isAnimating = false; // 애니메이션 진행 중 여부
+export let firstExplodeAnimating = false;  // 1차 분해 애니메이션 상태 전역 관리
 
 export let secondExplodeActive = false;  // 2차 분해가 활성화되었는지 여부를 전역으로 관리
 let secondExplodeFactor = 0;  // 2차 분해의 진행 상태를 저장
@@ -33,9 +34,6 @@ export function initializeExplode(scene) {
 export function toggleExplode() {
     if (isAnimating) return;  // 애니메이션 중이면 중복 실행 방지
 
-    // 2차 분해 상태 초기화
-    resetSecondExplode();
-
     isExploding = !isExploding;
     targetExplodeFactor = isExploding ? 0.03 : 0;  // 목표 explodeFactor 설정
     console.log("Exploding toggled: ", isExploding, " Target Explode Factor: ", targetExplodeFactor);
@@ -46,6 +44,7 @@ export function toggleExplode() {
     }
 
     isAnimating = true;  // 애니메이션 시작
+    firstExplodeAnimating = true;  // 1차 분해 애니메이션 상태 설정
     animateExplode();
 }
 
@@ -54,14 +53,14 @@ function updateWorldPositions() {
         const worldPosition = new THREE.Vector3();
         child.getWorldPosition(worldPosition);
         worldPositions.set(child, worldPosition);  // 월드 좌표로 업데이트
-        console.log(`Updated World Position for ${child.name}: ${worldPosition.x}, ${worldPosition.y}, ${worldPosition.z}`);
+        // console.log(`Updated World Position for ${child.name}: ${worldPosition.x}, ${worldPosition.y}, ${worldPosition.z}`);
     });
 }
 
 export function updateExplode() {
-    if (secondExplodeActive) {
-        // 2차 분해가 활성화된 상태라면 이 함수를 실행하지 않음
-        console.log("Skipping updateExplode due to active second explode.");
+    if (secondExplodeActive || secondAnimating) {
+        // 2차 분해가 활성화되었거나 애니메이션이 진행 중인 상태라면 이 함수를 실행하지 않음
+        console.log("Skipping updateExplode due to active or animating second explode.");
         return;
     }
 
@@ -85,7 +84,8 @@ function animateExplode() {
     } else {
         explodeFactor = targetExplodeFactor;
         updateExplode();
-        isAnimating = false;
+        isAnimating = false;  // 애니메이션 종료 상태 업데이트
+        firstExplodeAnimating = false; // 애니메이션 상태 초기화
     }
 }
 
@@ -134,51 +134,47 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
             secondInitialPositions.set(child, child.position.clone());
             const worldPosition = new THREE.Vector3();
             child.getWorldPosition(worldPosition);
-
             const randomOffset = new THREE.Vector3(
                 Math.random() * 0.2 - 0.1,
                 Math.random() * 0.2 - 0.1,
                 Math.random() * 0.2 - 0.1
             );
             worldPosition.add(randomOffset);
-
             secondWorldPositions.set(child, worldPosition);
-            console.log(`Child added for explode: ${child.name} with offset position: ${worldPosition.x}, ${worldPosition.y}, ${worldPosition.z}`);
+            // console.log(`Child added for explode: ${child.name} with offset position: ${worldPosition.x}, ${worldPosition.y}, ${worldPosition.z}`);
         }
     });
-
     if (secondInitialPositions.size === 0) {
         console.log("No child meshes to explode.");
         return;
     }
-
     secondAnimating = true;  // 애니메이션 시작
     secondExplodeFactor = 0; // 초기화
 
     function animateSecondExplode() {
         if (Math.abs(secondExplodeFactor - targetSecondExplodeFactor) > 0.01) {
             secondExplodeFactor += (targetSecondExplodeFactor - secondExplodeFactor) * 0.05;
-
             secondInitialPositions.forEach((initialPosition, child) => {
                 const direction = secondWorldPositions.get(child).clone().sub(selectedMesh.position).normalize();
                 const newPosition = initialPosition.clone().add(direction.multiplyScalar(secondExplodeFactor));
                 child.position.copy(newPosition);
             });
-
             renderer.render(scene, camera);
             console.log("Animating second explode...");
-
             requestAnimationFrame(animateSecondExplode);
         } else {
             secondExplodeFactor = targetSecondExplodeFactor;
             console.log("Second explode animation completed.");
             secondAnimating = false;
             secondExplodeActive = true; // 2차 분해 활성화 상태로 유지
+            console.log("SecondExplodeActive", secondExplodeActive);
+            renderer.domElement.dispatchEvent(new Event('animationCompleted'));
         }
     }
-
     animateSecondExplode();
 }
+
+
 export function resetSecondExplode() {
     secondExplodeFactor = 0;
     secondAnimating = false;
@@ -188,4 +184,8 @@ export function resetSecondExplode() {
     initialPositions.forEach((initialPosition, child) => {
         child.position.copy(initialPosition);
     });
+
+    isExploding = false; // 1차 분해 상태도 초기화
+    isAnimating = false; // 애니메이션 상태 초기화
+    firstExplodeAnimating = false; // 1차 분해 애니메이션 상태 초기화
 }
