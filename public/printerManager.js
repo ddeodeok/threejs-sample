@@ -5,6 +5,9 @@ export function printHierarchy(object, level = 0, maxLevel = { value: 0 }) {
     const indent = ' '.repeat(level * 2); 
     const worldPosition = new THREE.Vector3();
     object.getWorldPosition(worldPosition);  // 월드 좌표 얻기
+
+    // 로컬 좌표 얻기 (월드 좌표 대신 로컬 좌표 출력)
+    const localPosition = object.position; 
     
     // 자식이 있는 메쉬만 출력 (최소 단위 메쉬는 건너뜀)
     if (object.children.length > 0) {
@@ -15,9 +18,8 @@ export function printHierarchy(object, level = 0, maxLevel = { value: 0 }) {
     if (level > maxLevel.value) {
         maxLevel.value = level;
     }
-
-    // 자식이 있을 경우에만 재귀적으로 탐색
-    if (object.children.length > 0) {
+    const maxDepth = 3;
+    if (level < maxDepth) {  // 현재 레벨이 최대 깊이보다 작을 경우에만 재귀적으로 탐색
         object.children.forEach(child => {
             printHierarchy(child, level + 1, maxLevel);  // 자식 객체에 대해 재귀 호출
         });

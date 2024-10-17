@@ -19,19 +19,24 @@ export function setupInfoBox(scene, camera, renderer, infoBox) {
         const intersects = raycaster.intersectObjects(scene.children, true);
 
         if (intersects.length > 0) {
-            const clickedObject = intersects[0].object;
+            let clickedObject = intersects[0].object;
 
-            // 특정 부모 레벨을 찾기 위해 클릭된 객체의 부모를 거슬러 올라감
-            // let targetParent = findParentAtLevel(clickedObject, 1, scene);  // 레벨 1 상위 부모 찾기
-            let targetParent = findParentAtLevel(clickedObject, ['01_PCB_ASSY_ASM']); 
-          //   if (targetParent) {
-          //     clickedObject = targetParent;  // 상위 부모로 변경
-          // }
+          // 최상위 부모 찾기 및 깊이 계산
+          const topParent = findTopParent(clickedObject);
+          const depth = findDepthFromTop(clickedObject, topParent);
+
+          console.log(`Clicked object: ${clickedObject.name}, Depth: ${depth}`);
+
+          // 깊이가 3 이상일 경우, 깊이 2인 부모로 선택 변경
+          if (depth > 2) {
+              clickedObject = findParentAtDepth(clickedObject, topParent, 3);
+              console.log(`Depth exceeded. Switching selection to depth 2 parent: ${clickedObject.name}`);
+          }
             // 클릭된 객체에 따라 정보 표시
-            if (targetParent) { 
+            if (clickedObject.name) { 
                 infoBox.style.display = 'block'; // 정보 박스를 보이게 함
                 infoBox.innerHTML = `
-                  <div style="text-align: center;"><strong>${targetParent.name}</strong></div>
+                  <div style="text-align: center;"><strong>${clickedObject.name}</strong></div>
                   <hr style="border: 2px solid black; margin: 5px 0;">
                   <table style="width: 100%; border-collapse: collapse;">
                     <tr>
@@ -61,18 +66,37 @@ export function setupInfoBox(scene, camera, renderer, infoBox) {
     window.addEventListener('click', onDocumentMouseClick, false);
 }
 
+    // 최상위 부모 찾기
+  function findTopParent(object,scene) {
+      let currentObject = object;
+      while (currentObject.parent && currentObject.parent !== scene) {
+          currentObject = currentObject.parent;
+      }
+      return currentObject;  // 최상위 부모 반환
+  }
 
-// 특정 부모 레벨 찾기, 특정 이름에 도달하면 멈추는 기능을 추가하여 원하는 상위 부모까지 올라감
-function findParentAtLevel(object, stopNames = []) {
-    let currentObject = object;
+  // 클릭된 객체의 깊이를 계산하는 함수
+  function findDepthFromTop(object, topParent) {
+      let depth = 0;
+      let currentObject = object;
 
-    // 부모를 계속 타고 올라가면서 stopNames에 있는 이름을 찾을 때까지 반복
-    while (currentObject.parent && currentObject.parent !== object) {
-        if (stopNames.includes(currentObject.name)) {
-            break;
-        }
-        currentObject = currentObject.parent; // 부모로 계속 올라감
-    }
+      while (currentObject !== topParent && currentObject.parent) {
+          currentObject = currentObject.parent;
+          depth++;
+      }
 
-    return currentObject;
+      return depth;
+  }
+// 특정 깊이의 부모 메쉬 찾기 (깊이 2인 부모를 찾는 함수)
+function findParentAtDepth(object, topParent, targetDepth) {
+  let depth = findDepthFromTop(object, topParent);
+  let currentObject = object;
+
+  // 현재 깊이가 targetDepth보다 크면 부모로 계속 올라감
+  while (depth > targetDepth) {
+      currentObject = currentObject.parent;
+      depth--;
+  }
+
+  return currentObject;  // 지정한 깊이의 부모 반환
 }
