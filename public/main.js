@@ -28,15 +28,17 @@ clippingManager.enableClipping(renderer);
 let loader = new GLTFLoader();
 // loader.load('./3d_images/gltf/Car SeatsCar Seat.gltf', function (gltf) {
   loader.load('./3d_images/gltf/gltf3.gltf', function (gltf) {
+    // loader.load('./3d_images/gltf/SeatsCar1007-2.gltf', function (gltf) {
     scene.add(gltf.scene);  
     // 모델을 X축을 기준으로 90도 회전시킴 (누워 있는 상태로 변경)
     gltf.scene.rotation.x = Math.PI / 2; // X축을 기준으로 90도 회전 
-    initializeExplode(scene); // 여기에서 초기 위치를 저장
+    initializeExplode(scene); // 여기에서 초기 위치를 저장Model Hierarchy:
     clippingManager.applyClippingToScene(gltf.scene);  // 모델 로드 후 클리핑 적용
     
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const boxSize = box.getSize(new THREE.Vector3()).length();
     const boxCenter = box.getCenter(new THREE.Vector3());
+    console.log("박스센터",boxCenter);
 
     const { camera, controls } = setupCamera(renderer, scene, boxCenter, boxSize); // 카메라 설정
     setupLights(scene); // 조명 설정
@@ -44,6 +46,7 @@ let loader = new GLTFLoader();
     const meshSelectionManager = new MeshSelectionManager(camera, scene, renderer); // MeshSelectionManager 초기화
     console.log('Model Hierarchy:');
     printHierarchy(gltf.scene);
+    // logTopLevelMeshesWithChildren(scene);
 
     document.getElementById('clippingButton').addEventListener('click', () => {
       clippingManager.toggleClipping();
@@ -82,7 +85,6 @@ let loader = new GLTFLoader();
       // }
       // 2차 분해 애니메이션이 진행 중이거나 완료되지 않았을 때는 updateExplode 실행 안 함
   if (!secondExplodeActive && !secondAnimating) {
-    console.log("너가 설마?");
     updateExplode(scene);  // 2차 분해가 활성화되지 않은 경우에만 업데이트 실행
   }
     });

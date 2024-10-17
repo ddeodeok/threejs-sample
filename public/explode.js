@@ -6,6 +6,7 @@ const initialPositions = new Map();  // 초기 로컬 좌표
 const worldPositions = new Map();    // 월드 좌표
 let modelCenter = new THREE.Vector3();
 let targetExplodeFactor = 0;  // 목표 explodeFactor
+let meshListPrinted = false; // 플래그: 메쉬 목록이 출력되었는지 여부
 let animationSpeed = 0.1;  // 애니메이션 속도 조정
 let isAnimating = false; // 애니메이션 진행 중 여부
 export let firstExplodeAnimating = false;  // 1차 분해 애니메이션 상태 전역 관리
@@ -17,13 +18,16 @@ export let secondAnimating = false;  // 2차 분해 상태를 전역으로 관�
 export function initializeExplode(scene) {
     let count = 0;
     let center = new THREE.Vector3();
+    
     scene.traverse(function(child) {
         if (child.isMesh) {
             initialPositions.set(child, child.position.clone());  // 로컬 좌표로 초기 위치를 설정
             center.add(child.position);
             count++;
+            // console.log(`메쉬 초기화됨: ${child.name}`);  // 메쉬 추가 로그
         }
     });
+
     if (count > 0) {
         center.divideScalar(count);  // 평균 위치 계산
         modelCenter.copy(center);  // 모델의 중심점을 업데이트
@@ -36,6 +40,7 @@ export function toggleExplode() {
 
     isExploding = !isExploding;
     targetExplodeFactor = isExploding ? 0.03 : 0;  // 목표 explodeFactor 설정
+    // targetExplodeFactor = isExploding ? 0.5 : 0;  // 목표 explodeFactor 설정
     console.log("Exploding toggled: ", isExploding, " Target Explode Factor: ", targetExplodeFactor);
 
     if (isExploding && worldPositions.size === 0) {
@@ -64,17 +69,57 @@ export function updateExplode() {
         return;
     }
 
-    initialPositions.forEach((initialPosition, child) => {
-        let newPosition;
-        if (explodeFactor > 0) {
-            const direction = worldPositions.get(child).clone().sub(modelCenter).normalize();
-            newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
-        } else {
-            newPosition = initialPosition.clone();
+    if (!meshListPrinted) {     
+        initialPositions.forEach((initialPosition, parentMesh) => {
+            // console.log(`${parentMesh.name}`)
+            let newPosition;
+            if (explodeFactor > 0) {
+                const direction = worldPositions.get(parentMesh).clone().sub(modelCenter).normalize();
+                newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
+            } else {
+                newPosition = initialPosition.clone();
+            }
+            parentMesh.position.copy(newPosition);
+        });
+        // meshListPrinted = true; // 목록이 한 번 출력된 후에는 다시 출력하지 않음
+    }
+}
+
+
+// 자식메쉬도 분해
+function explodeMesh(mesh, initialPosition, explodeFactor, modelCenter) {
+    // console.log("자식메쉬분해?")
+    let newPosition;
+    if (explodeFactor > 0) {
+        const direction = worldPositions.get(mesh).clone().sub(modelCenter).normalize();
+        newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
+    } else {
+        newPosition = initialPosition.clone();
+    }
+
+    mesh.position.copy(newPosition);
+
+    // 재귀적으로 모든 자식 메쉬 분해
+    mesh.children.forEach((child) => {
+        if (child.isMesh) {
+            explodeMesh(child, initialPosition, explodeFactor, modelCenter);
         }
-        child.position.copy(newPosition);
     });
 }
+// 좌표값 같은 애들 처리 
+function addOffsetIfSamePosition(mesh, otherMesh) {
+    if (mesh.position.equals(otherMesh.position)) {
+        // console.log(`좌표가 동일하여 오프셋을 추가합니다: ${mesh.name}`);
+        // console.log(`좌표가 동일한 메쉬: ${mesh.name}, ${otherMesh.name}`);
+        // console.log(`기존 좌표: ${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z}`);
+        
+        mesh.position.x += Math.random() * 0.01;  // 임의의 작은 오프셋 추가
+        mesh.position.y += Math.random() * 0.01;
+        mesh.position.z += Math.random() * 0.01;
+        // console.log(`업데이트된 좌표: ${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z}`);
+    }
+}
+
 
 function animateExplode() {
     if (Math.abs(explodeFactor - targetExplodeFactor) > 0.01) {
