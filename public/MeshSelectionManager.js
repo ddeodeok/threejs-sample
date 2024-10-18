@@ -91,6 +91,7 @@ export class MeshSelectionManager {
 
         return depth;
     }
+    
     // 특정 깊이의 부모 메쉬 찾기 (깊이 2인 부모를 찾는 함수)
     findParentAtDepth(object, topParent, targetDepth) {
         let depth = this.findDepthFromTop(object, topParent);

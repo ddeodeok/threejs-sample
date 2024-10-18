@@ -9,6 +9,8 @@ let targetExplodeFactor = 0;  // 목표 explodeFactor
 let meshListPrinted = false; // 플래그: 메쉬 목록이 출력되었는지 여부
 let animationSpeed = 0.1;  // 애니메이션 속도 조정
 let isAnimating = false; // 애니메이션 진행 중 여부
+let secondInitialPositions = new Map(); // 전역 변수로 선언
+let secondWorldPositions = new Map(); // 전역 변수로 선언
 export let firstExplodeAnimating = false;  // 1차 분해 애니메이션 상태 전역 관리
 
 export let secondExplodeActive = false;  // 2차 분해가 활성화되었는지 여부를 전역으로 관리
@@ -65,15 +67,25 @@ function updateWorldPositions() {
 export function updateExplode() {
     if (secondExplodeActive || secondAnimating) {
         // 2차 분해가 활성화되었거나 애니메이션이 진행 중인 상태라면 이 함수를 실행하지 않음
-        console.log("Skipping updateExplode due to active or animating second explode.");
+        // console.log("Skipping updateExplode due to active or animating second explode.");
         return;
     }
 
     if (!meshListPrinted) {     
         initialPositions.forEach((initialPosition, parentMesh) => {
-            // console.log(`${parentMesh.name}`)
             let newPosition;
-            if (explodeFactor > 0) {
+
+            // 특정 메쉬 그룹인 경우 수동으로 위치 설정
+            if (explodeFactor > 0 && parentMesh.name.toLowerCase().includes("aaa_battery")) {
+            // 목표 위치 설정 (예: x=0, y=0.03, z=0)
+            const targetPosition = new THREE.Vector3(0, 0.03, 0);
+            // 목표 위치와 초기 위치 사이의 방향 벡터 계산
+            const direction = targetPosition.clone().sub(initialPosition).normalize();
+            // explodeFactor를 사용하여 점진적으로 이동
+            newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
+
+            } else if (explodeFactor > 0) {
+                // 기존 로직: explodeFactor를 사용한 위치 계산
                 const direction = worldPositions.get(parentMesh).clone().sub(modelCenter).normalize();
                 newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
             } else {
@@ -84,42 +96,6 @@ export function updateExplode() {
         // meshListPrinted = true; // 목록이 한 번 출력된 후에는 다시 출력하지 않음
     }
 }
-
-
-// 자식메쉬도 분해
-function explodeMesh(mesh, initialPosition, explodeFactor, modelCenter) {
-    // console.log("자식메쉬분해?")
-    let newPosition;
-    if (explodeFactor > 0) {
-        const direction = worldPositions.get(mesh).clone().sub(modelCenter).normalize();
-        newPosition = initialPosition.clone().add(direction.multiplyScalar(explodeFactor));
-    } else {
-        newPosition = initialPosition.clone();
-    }
-
-    mesh.position.copy(newPosition);
-
-    // 재귀적으로 모든 자식 메쉬 분해
-    mesh.children.forEach((child) => {
-        if (child.isMesh) {
-            explodeMesh(child, initialPosition, explodeFactor, modelCenter);
-        }
-    });
-}
-// 좌표값 같은 애들 처리 
-function addOffsetIfSamePosition(mesh, otherMesh) {
-    if (mesh.position.equals(otherMesh.position)) {
-        // console.log(`좌표가 동일하여 오프셋을 추가합니다: ${mesh.name}`);
-        // console.log(`좌표가 동일한 메쉬: ${mesh.name}, ${otherMesh.name}`);
-        // console.log(`기존 좌표: ${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z}`);
-        
-        mesh.position.x += Math.random() * 0.01;  // 임의의 작은 오프셋 추가
-        mesh.position.y += Math.random() * 0.01;
-        mesh.position.z += Math.random() * 0.01;
-        // console.log(`업데이트된 좌표: ${mesh.position.x}, ${mesh.position.y}, ${mesh.position.z}`);
-    }
-}
-
 
 function animateExplode() {
     if (Math.abs(explodeFactor - targetExplodeFactor) > 0.01) {
@@ -150,7 +126,8 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
             if (Math.abs(secondExplodeFactor - 0) > 0.01) {
                 secondExplodeFactor += (0 - secondExplodeFactor) * 0.05;
 
-                initialPositions.forEach((initialPosition, child) => {
+                // 2차 분해된 메쉬들의 초기 위치로 되돌림
+                secondInitialPositions.forEach((initialPosition, child) => {
                     child.position.copy(initialPosition); // 초기 위치로 되돌림
                 });
 
@@ -170,12 +147,17 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
         return;
     }
 
-    const secondInitialPositions = new Map();
-    const secondWorldPositions = new Map();
+    let secondInitialPositions = new Map();
+    let secondWorldPositions = new Map();
     const targetSecondExplodeFactor = 0.05;  // 목표 값을 더 크게 설정
 
-    selectedMesh.traverse((child) => {
-        if (child.isMesh && child !== selectedMesh) {
+    function addChildMeshesToExplode(selectedMesh) {
+        let foundChild = false; // 자식 메쉬가 있는지 확인하는 플래그
+    
+        selectedMesh.children.forEach((child) => {
+            // console.log(`Inspecting child: ${child.name}, type: ${child.type}`);
+    
+            // 직속 자식을 분해 대상으로 추가
             secondInitialPositions.set(child, child.position.clone());
             const worldPosition = new THREE.Vector3();
             child.getWorldPosition(worldPosition);
@@ -186,9 +168,21 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
             );
             worldPosition.add(randomOffset);
             secondWorldPositions.set(child, worldPosition);
-            // console.log(`Child added for explode: ${child.name} with offset position: ${worldPosition.x}, ${worldPosition.y}, ${worldPosition.z}`);
+            // console.log(`Added child for explode: ${child.name}`);
+            foundChild = true; // 자식 메쉬를 찾았음을 표시
+        });
+    
+        // 자식 메쉬가 하나도 없으면 로그를 출력하고 함수 종료
+        if (!foundChild) {
+            console.log("No child meshes to explode.");
+            return;
         }
-    });
+    }
+    
+    // 자식 메쉬를 추가하는 함수 호출
+    addChildMeshesToExplode(selectedMesh);
+    
+
     if (secondInitialPositions.size === 0) {
         console.log("No child meshes to explode.");
         return;
@@ -205,7 +199,7 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
                 child.position.copy(newPosition);
             });
             renderer.render(scene, camera);
-            console.log("Animating second explode...");
+            // console.log("Animating second explode...");
             requestAnimationFrame(animateSecondExplode);
         } else {
             secondExplodeFactor = targetSecondExplodeFactor;
@@ -219,14 +213,13 @@ export function toggleSecondExplode(selectedMesh, renderer, camera, scene) {
     animateSecondExplode();
 }
 
-
 export function resetSecondExplode() {
     secondExplodeFactor = 0;
     secondAnimating = false;
     secondExplodeActive = false; // 2차 분해 상태 초기화
 
-    // 초기 위치로 되돌리기
-    initialPositions.forEach((initialPosition, child) => {
+    // 초기 위치로 되돌리기 (2차 분해된 메쉬 사용)
+    secondInitialPositions.forEach((initialPosition, child) => {
         child.position.copy(initialPosition);
     });
 
